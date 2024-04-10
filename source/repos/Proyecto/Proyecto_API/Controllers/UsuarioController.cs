@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Proyecto_API.Data;
 using Proyecto_API.DTO;
 using Proyecto_API.Models;
@@ -11,11 +12,21 @@ namespace Proyecto_API.Controllers
     [ApiController]
     public class UsuarioController : ControllerBase
     {
+        private readonly ILogger<UsuarioController> _logger;
+        private readonly ApplicationDbContext _dbcontext;
+        public UsuarioController( ILogger<UsuarioController> logger, ApplicationDbContext dbcontext)
+        {
+            _logger = logger;
+            _dbcontext = dbcontext;
+        }
+
+
         [HttpGet]
         [ProducesResponseType(StatusCodes.Status200OK)]
         public  ActionResult<IEnumerable<UsuarioDTO>> GetUsuarios()
         {
-            return Ok(UsuarioStore.usuarioList);
+            _logger.LogInformation("Obtener los Usuarios");
+            return Ok(_dbcontext.Usuarios.ToList());
         }
 
         [HttpGet ("id:int", Name="GetUsuario")]
@@ -28,7 +39,8 @@ namespace Proyecto_API.Controllers
             {
                 return BadRequest();
             }
-            var usuario = UsuarioStore.usuarioList.FirstOrDefault(v => v.Id == id);
+            //var usuario = UsuarioStore.usuarioList.FirstOrDefault(v => v.Id == id);
+            var usuario=_dbcontext.Usuarios.FirstOrDefault(x => x.Id == id);
             if(usuario ==null)
             {
                 return NotFound();
@@ -46,7 +58,12 @@ namespace Proyecto_API.Controllers
             {
                 return BadRequest(ModelState);
             }
-            if (usuarioDTO == null)
+            if (_dbcontext.Usuarios.FirstOrDefault(x => x.Nombre.ToLower() == usuarioDTO.Nombre.ToLower()) != null)
+            {
+                ModelState.AddModelError("NombreExiste", "El Usuario con ese Nombre ya Existe!");
+                return BadRequest(ModelState);
+            }
+            if(usuarioDTO == null)
             {
                 return BadRequest(usuarioDTO);
             }
@@ -54,9 +71,17 @@ namespace Proyecto_API.Controllers
             {
                 return StatusCode(StatusCodes.Status500InternalServerError);
             }
-            usuarioDTO.Id = UsuarioStore.usuarioList.OrderByDescending(v => v.Id).FirstOrDefault().Id + 1;
-            UsuarioStore.usuarioList.Add(usuarioDTO);
+            Usuario model = new()
+            {
+                Nombre = usuarioDTO.Nombre,
+                Apellido = usuarioDTO.Apellido,
+                Correo = usuarioDTO.Correo,
+                Numero = usuarioDTO.Numero,
+                ImagenUrl = usuarioDTO.ImageUrl,
 
+            };
+           _dbcontext.Usuarios.Add(model);
+            _dbcontext.SaveChanges();
             return CreatedAtRoute("GetUsuario", new {id= usuarioDTO.Id}, usuarioDTO);
         }
 
@@ -71,12 +96,13 @@ namespace Proyecto_API.Controllers
             {
                 return BadRequest();
             }
-            var usuario = UsuarioStore.usuarioList.FirstOrDefault(v => v.Id == id);
+            var usuario = _dbcontext.Usuarios.FirstOrDefault(v => v.Id == id);
             if(usuario == null)
             {
                 return NotFound();
             }
-            UsuarioStore.usuarioList.Remove(usuario);
+            _dbcontext.Usuarios.Remove(usuario);
+            _dbcontext.SaveChanges();
             return NoContent();
         }
 
@@ -90,11 +116,17 @@ namespace Proyecto_API.Controllers
             {
                 return BadRequest();
             }
-            var usuario = UsuarioStore.usuarioList.FirstOrDefault(v => v.Id == id);
-            usuario.Nombre = usuarioDTO.Nombre;
-            usuario.Apellido= usuarioDTO.Apellido;
-            usuario.Correo = usuarioDTO.Correo;
-            usuario.Numero  = usuarioDTO.Numero;
+            Usuario modelo = new()
+            {
+                Id = usuarioDTO.Id,
+                Nombre = usuarioDTO.Nombre,
+                Apellido = usuarioDTO.Apellido,
+                Numero = usuarioDTO.Numero,
+                Correo = usuarioDTO.Correo,
+                ImagenUrl = usuarioDTO.ImageUrl,
+            };
+            _dbcontext.Usuarios.Update(modelo);
+            _dbcontext.SaveChanges();
             return NoContent();
         }
 
@@ -110,13 +142,36 @@ namespace Proyecto_API.Controllers
             {
                 return BadRequest();
             }
-            var usuario = UsuarioStore.usuarioList.FirstOrDefault(v => v.Id == id);
+            //var usuario = UsuarioStore.usuarioList.FirstOrDefault(v => v.Id == id);
+            var usuario =_dbcontext.Usuarios.AsNoTracking().FirstOrDefault(u => u.Id == id);
+            UsuarioDTO usuariodto = new()
+            {
+                Id = usuario.Id,
+                Nombre = usuario.Nombre,
+                Apellido=usuario.Apellido,
+                Numero = usuario.Numero,
+                Correo=usuario.Correo,
+                ImageUrl=usuario.ImagenUrl
 
-            patchDTO.ApplyTo(usuario, ModelState);
+            };
+            if (usuario == null) return BadRequest();
+
+            patchDTO.ApplyTo(usuariodto, ModelState);
             if(!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
             }
+            Usuario modelo = new()
+            {
+                Id = usuariodto.Id,
+                Nombre = usuariodto.Nombre,
+                Apellido = usuariodto.Apellido,
+                Numero = usuariodto.Numero,
+                Correo = usuariodto.Correo,
+                ImagenUrl = usuariodto.ImageUrl
+            };
+            _dbcontext.Usuarios.Update(modelo);
+            _dbcontext.SaveChanges();
             return NoContent();
            
         }
